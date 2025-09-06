@@ -1,6 +1,6 @@
 {
 	"python-envs.pythonProjects": [],
-	"[makefile]": {
-		"editor.insertSpaces": false
+	"[python]": {
+		"editor.insertSpaces": true
 	}
 }

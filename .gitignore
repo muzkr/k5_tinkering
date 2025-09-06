@@ -40,5 +40,5 @@
 # debug information files
 *.dwo
 
-
+/.venv
 __pycache__/
