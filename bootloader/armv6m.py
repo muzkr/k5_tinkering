@@ -350,7 +350,7 @@ def dec32(code1: int, code2: int) -> str:
         match 0b1111 & (code2 >> 4):
             case 0b0100:
                 # 0100
-                return _dec32_DSB(code1, code2)
+                return _dec_DSB(code1, code2)
             case 0b0101:
                 # 0101
                 return _dec32_DMB(code1, code2)
@@ -374,11 +374,6 @@ def dec32(code1: int, code2: int) -> str:
 
 
 def _dec32_MSR_register(code1: int, code2: int) -> str:
-    # TODO
-    raise NotImplementedError()
-
-
-def _dec32_DSB(code1: int, code2: int) -> str:
     # TODO
     raise NotImplementedError()
 
@@ -730,6 +725,17 @@ def _dec_BX_etc(code: int, mnem: str) -> str:
         _mnem_case(mnem),
         _reg_case(rm),
     )
+
+
+def _dec_DSB(code1: int, code2: int) -> str:
+
+    # bits [3:0]
+    opt = 0xF & code2
+
+    if 0b1111 == opt:
+        return "{}".format(_mnem_case("DSB"))
+
+    raise ValueError()
 
 
 def _dec_LDM(code: int) -> str:

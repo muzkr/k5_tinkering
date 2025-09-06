@@ -175,7 +175,7 @@ IRQ_31_GPIOC_Handler:   0000010e
 00c4: f000      ; [...]
 00c6: f874      ; bl [pc, #0xe8]    ; 01b0, call 01b0 load_ram_fw1()
 00c8: 4800      ; ldr r0 [pc, #0x0] ; 0911
-00ca: 4700      ; bx r0             ; goto 0910 xxx()
+00ca: 4700      ; bx r0             ; goto 0910 main()
 00cc: 0911  ; literal
 00ce: 0000
 00d0: 15d8  ; literal
@@ -233,32 +233,64 @@ IRQ_31_GPIOC_Handler:   0000010e
 0122: 0000
 0124: 00c1  ; literal pool
 0126: 0000
-0128: b530
-012a: 460b
-012c: 4601
-012e: 2000
-0130: 2220
-0132: 2401
-0134: e009
-0136: 460d
-0138: 40d5
-013a: 429d
-013c: d305
-013e: 461d
-0140: 4095
-0142: 1b49
-0144: 4625
-0146: 4095
-0148: 1940
-014a: 4615
-014c: 1e52
-014e: 2d00
-0150: dcf1
-0152: bd30
-0154: 4603
-0156: 430b
-0158: 079b
-015a: d003
+```
+
+## 0128 calc_uart_baud()
+
+Args:
+- r0: freq
+- r1: n
+
+Return:
+- ??
+
+
+```
+0128: b530      ; push { r4, r5, lr }
+012a: 460b      ; mov r3, r1			; n
+012c: 4601      ; mov r1, r0			; freq
+012e: 2000      ; movs r0, #0x0			; ret = 0
+0130: 2220      ; movs r2, #0x20		; i = 32
+0132: 2401      ; movs r4, #0x1
+0134: e009      ; b [pc, #0x12]			; goto 014a
+```
+
+```c
+for(int i=31; i>=0; i--){
+```
+
+```
+0136: 460d      ; mov r5, r1
+0138: 40d5      ; lsrs r5, r5, r2	; freq >> i
+013a: 429d      ; cmp r5, r3
+013c: d305      ; bcc [pc, #0xa]	; if (freq >> i) < n, goto 014a ; else ..
+013e: 461d      ; mov r5, r3
+0140: 4095      ; lsls r5, r5, r2	; n << i
+0142: 1b49      ; subs r1, r5		; freq -= (n << i)
+0144: 4625      ; mov r5, r4
+0146: 4095      ; lsls r5, r5, r2	; 1 << i
+0148: 1940      ; adds r0, r5		; ret += (1 << i)
+```
+
+```c
+}
+```
+
+```
+014a: 4615      ; mov r5, r2
+014c: 1e52      ; subs r2, #0x1
+014e: 2d00      ; cmp r5, #0x0			; if i > 0: i-- ; 
+0150: dcf1      ; bgt [pc, #-0x1e]		; .. goto 0136
+0152: bd30      ; pop { r4, r5, pc }
+```
+
+## 0154 _
+
+```
+0154: 4603      ; mov r3, r0
+0156: 430b      ; orrs r3, r1
+0158: 079b      ; lsls r3, r3, #0x1e
+015a: d003      ; beq [pc, #0x6]
 015c: e009
 015e: c908
 0160: 1f12
@@ -393,15 +425,23 @@ Branch to RAM fw at 0x2000008c (init_flash())
 Branch to [ram_fw1](#0a34-ram_fw1) at 0x20000294 (init_chip())
 
 
-## 0210 _
+## 0210 run_fw_safe() 
+
+ 
 
 ```
 0210: b403      ; push { r0, r1 }
-0212: 4801      ; ldr r0 [pc, #0x4]
-0214: 9001      ; str r0, [sp, #0x4]
-0216: bd01
-0218: 0001
+0212: 4801      ; ldr r0 [pc, #0x4]		; 20000001
+0214: 9001      ; str r0, [sp, #0x4]	; 
+0216: bd01      ; pop { r0, pc }		; branch to 20000000, call run_fw() 
+0218: 0001	; literal 
 021a: 2000
+```
+
+## 021c _
+
+
+```
 021c: b510
 021e: 4809
 0220: 4a09
@@ -648,8 +688,17 @@ Branch to [ram_fw1](#0a34-ram_fw1) at 0x20000294 (init_chip())
 0402: 4770
 0404: 1100
 0406: 4000
-0408: e00c
-040a: bf00
+```
+
+## 0408 delay_us()
+
+Args:
+- r0: n
+
+
+```
+0408: e00c      ; b [pc, #0x18]		; goto 0424
+040a: bf00      ; nop
 040c: bf00
 040e: bf00
 0410: bf00
@@ -661,27 +710,43 @@ Branch to [ram_fw1](#0a34-ram_fw1) at 0x20000294 (init_chip())
 041c: bf00
 041e: bf00
 0420: bf00
-0422: 1e40
-0424: 2800
-0426: d1f0
-0428: 4770
+0422: 1e40      ; subs r0, #0x1		; n--
+0424: 2800      ; cmp r0, #0x0			; 
+0426: d1f0      ; bne [pc, #-0x20]		; if n != 0 , goto 040a
+0428: 4770      ; bx lr
 042a: 0000
-042c: 4906
-042e: 6809
-0430: 6001
-0432: 4905
-0434: 6849
-0436: 6041
-0438: 4903
-043a: 6889
-043c: 6081
-043e: 4902
-0440: 68c9
-0442: 60c1
-0444: 4770
+```
+
+## 042c load_chip_id()
+
+Args:
+- r0: p
+
+
+```
+042c: 4906      ; ldr r1 [pc, #0x18]	; 0448 -> 40000080
+042e: 6809      ; ldr r1, [r1]			; SYSCON.CHIP_ID0
+0430: 6001      ; str r1, [r0]			; p[0] = SYSCON.CHIP_ID0
+0432: 4905      ; ldr r1 [pc, #0x14]	; 0448 -> 40000080
+0434: 6849      ; ldr r1, [r1, #0x4]	; CHIP _ID1
+0436: 6041      ; str r1, [r0, #0x4]	; p[1] = CHIP _ID1
+0438: 4903      ; ldr r1 [pc, #0xc]		; 0448 -> 40000080
+043a: 6889      ; ldr r1, [r1, #0x8]	; CHIP _ID2
+043c: 6081      ; str r1, [r0, #0x8]	; p[2] = CHIP _ID2
+043e: 4902      ; ldr r1 [pc, #0x8]
+0440: 68c9      ; ldr r1, [r1, #0xc]
+0442: 60c1      ; str r1, [r0, #0xc]
+0444: 4770      ; bx lr
 0446: 0000
-0448: 0080
+0448: 0080	; literal
 044a: 4000
+```
+
+
+## 044c _
+
+
+```
 044c: b530
 044e: 4602
 0450: 460b
@@ -804,103 +869,115 @@ IO config:
 ```
 
 
-## 04f0 _
+## 04f0 config_uart()
 
 
 ```
-04f0: b5f8      
-04f2: 2001
-04f4: 0780
-04f6: 6880
-04f8: 2180
-04fa: 4308
-04fc: 05c9
-04fe: 6088
-0500: 4825
-0502: 6800
-0504: 0840
-0506: 0040
-0508: 4923
-050a: 6008
-050c: 4823
-050e: 6b84
-0510: 0060
-0512: 0b06
-0514: 0fe7
-0516: 2f00
-0518: d002
-051a: 4821
-051c: 1834
-051e: e001
-0520: 481f
-0522: 1b84
-0524: 491f
-0526: 4620
-0528: f7ff
-052a: fdfe
-052c: 4605
-052e: 481a
-0530: 6045
-0532: 200e
-0534: 4918
-0536: 6008
-0538: 2004
-053a: 6208
-053c: 2000
-053e: 61c8
-0540: 20c7
-0542: 6188
-0544: 2000
-0546: 6108
-0548: 4817
-054a: 6800
-054c: 0840
-054e: 0040
-0550: 4915
-0552: 6008
-0554: 4910
-0556: 310c
-0558: 4814
-055a: 6081
-055c: 4914
-055e: 60c1
-0560: 21ff
-0562: 3111
-0564: 6041
-0566: 2000
-0568: 490f
-056a: 6048
-056c: 4811
-056e: 6088
-0570: 4811
-0572: 490e
-0574: 6008
-0576: 2020
-0578: 4907
-057a: 6148
-057c: 480a
-057e: 6800
-0580: 2101
-0582: 4308
-0584: 4908
-0586: 6008
-0588: 4803
-058a: 6800
-058c: 2101
-058e: 4308
-0590: 4901
-0592: 6008
-0594: bdf8
+04f0: b5f8      ; push { r3 - r7, lr }
+04f2: 2001      ; movs r0, #0x1
+04f4: 0780      ; lsls r0, r0, #0x1e    ; 1 << 30 = 0x40000000, SYSCON
+04f6: 6880      ; ldr r0, [r0, #0x8]    ; DEV_CLK_GATE -> reg
+04f8: 2180      ; movs r1, #0x80
+04fa: 4308      ; orrs r0, r1			; reg | 0x80, enable bits [7], UART1_CLK_GATE
+04fc: 05c9      ; lsls r1, r1, #0x17	; 
+04fe: 6088      ; str r0, [r1, #0x8]	; DEV_CLK_GATE = reg
+```
+
+```
+0500: 4825      ; ldr r0 [pc, #0x94]	; 0598 -> 4006b800, UART1
+0502: 6800      ; ldr r0, [r0]			; UART_CTRL -> reg
+0504: 0840      ; lsrs r0, r0, #0x1
+0506: 0040      ; lsls r0, r0, #0x1		; Clear bit 0, reg.UARTEN = 0
+0508: 4923      ; ldr r1 [pc, #0x8c]	; 
+050a: 6008      ; str r0, [r1]
+```
+
+```
+050c: 4823      ; ldr r0 [pc, #0x8c]	; 059c -> 40000040
+050e: 6b84      ; ldr r4, [r0, #0x38]	; SYSCON.RC_FREQ_DELTA -> reg
+0510: 0060      ; lsls r0, r4, #0x1
+0512: 0b06      ; lsrs r6, r0, #0xc		; (reg << 1) >> 12, reg.RCHF_DELTA
+0514: 0fe7      ; lsrs r7, r4, #0x1f	; reg >> 31, reg.RCHF_SIG
+0516: 2f00      ; cmp r7, #0x0
+0518: d002      ; beq [pc, #0x4]		; if reg.RCHF_SIG == 0, goto 0520 ; else ..
+051a: 4821      ; ldr r0 [pc, #0x84]	; 05a0 -> 02dc6c00, 48000000
+051c: 1834      ; adds r4, r6, r0		; reg.RCHF_DELTA + 48000000 -> x
+051e: e001      ; b [pc, #0x2]			; goto 0524
+0520: 481f      ; ldr r0 [pc, #0x7c]	; 05a0 -> 48000000
+0522: 1b84      ; subs r4, r0, r6		; 48000000 - reg.RCHF_DELTA -> x
+0524: 491f      ; ldr r1 [pc, #0x7c]	; 05a4 -> 988d
+0526: 4620      ; mov r0, r4
+0528: f7ff      ; [...]
+052a: fdfe      ; bl [pc, #-0x404]		; call 0128, calc_uart_baud(x, 0x988d) -> x
+052c: 4605      ; mov r5, r0			; x
+052e: 481a      ; ldr r0 [pc, #0x68]	; 0598 -> 4006b800, UART1
+0530: 6045      ; str r5, [r0, #0x4]	; UART_BAUD = x
+```
+
+```
+0532: 200e      ; movs r0, #0xe
+0534: 4918      ; ldr r1 [pc, #0x60]	; 0598 -> UART1
+0536: 6008      ; str r0, [r1]			; UART_CTRL = 0xe , enable bits [3:1]: RXEN, TXEN, RXDMAEN
+0538: 2004      ; movs r0, #0x4
+053a: 6208      ; str r0, [r1, #0x20]	; UART_RXTO = 0x4 , timeout value
+053c: 2000      ; movs r0, #0x0
+053e: 61c8      ; str r0, [r1, #0x1c]	; UART_FC = 0, 
+0540: 20c7      ; movs r0, #0xc7
+0542: 6188      ; str r0, [r1, #0x18]	; UART_FIFO = 0xc7 : RF_LEVEL =8, RF_CLR=1, TF_CLR=1
+0544: 2000      ; movs r0, #0x0
+0546: 6108      ; str r0, [r1, #0x10]	; UART_IE = 0 
+```
+
+```
+0548: 4817      ; ldr r0 [pc, #0x5c]	; 05a8 -> 40001000, DMA
+054a: 6800      ; ldr r0, [r0]			; DMA_CTR -> reg
+054c: 0840      ; lsrs r0, r0, #0x1
+054e: 0040      ; lsls r0, r0, #0x1		; Clear bit 0, reg.DMA_EN =0
+0550: 4915      ; ldr r1 [pc, #0x54]
+0552: 6008      ; str r0, [r1]
+0554: 4910      ; ldr r1 [pc, #0x40]
+0556: 310c      ; adds r1, #0xc
+0558: 4814      ; ldr r0 [pc, #0x50]
+055a: 6081      ; str r1, [r0, #0x8]
+055c: 4914      ; ldr r1 [pc, #0x50]
+055e: 60c1      ; str r1, [r0, #0xc]
+0560: 21ff      ; movs r1, #0xff
+0562: 3111      ; adds r1, #0x11
+0564: 6041      ; str r1, [r0, #0x4]
+0566: 2000      ; movs r0, #0x0
+0568: 490f      ; ldr r1 [pc, #0x3c]
+056a: 6048      ; str r0, [r1, #0x4]
+056c: 4811      ; ldr r0 [pc, #0x44]
+056e: 6088      ; str r0, [r1, #0x8]
+0570: 4811      ; ldr r0 [pc, #0x44]
+0572: 490e      ; ldr r1 [pc, #0x38]
+0574: 6008      ; str r0, [r1]
+0576: 2020      ; movs r0, #0x20
+0578: 4907      ; ldr r1 [pc, #0x1c]
+057a: 6148      ; str r0, [r1, #0x14]
+057c: 480a      ; ldr r0 [pc, #0x28]
+057e: 6800      ; ldr r0, [r0]
+0580: 2101      ; movs r1, #0x1
+0582: 4308      ; orrs r0, r1
+0584: 4908      ; ldr r1 [pc, #0x20]
+0586: 6008      ; str r0, [r1]
+0588: 4803      ; ldr r0 [pc, #0xc]
+058a: 6800      ; ldr r0, [r0]
+058c: 2101      ; movs r1, #0x1
+058e: 4308      ; orrs r0, r1
+0590: 4901      ; ldr r1 [pc, #0x4]
+0592: 6008      ; str r0, [r1]
+0594: bdf8      ; pop { r3 - r7, pc }
 0596: 0000
-0598: b800
+0598: b800	; literal 
 059a: 4006
-059c: 0040
+059c: 0040 ; 
 059e: 4000
-05a0: 6c00
+05a0: 6c00 ; 
 05a2: 02dc
-05a4: 988d
+05a4: 988d ; 
 05a6: 0000
-05a8: 1000
+05a8: 1000 ; 
 05aa: 4000
 05ac: 1100
 05ae: 4000
@@ -1206,28 +1283,59 @@ IO config:
 0806: 2000
 0808: 09ec
 080a: 0000
-080c: b510
-080e: 4602
-0810: 2000
-0812: e00b
-0814: 5c13
-0816: 4c07
-0818: 60a3
-081a: bf00
-081c: 4b05
-081e: 695b
-0820: 2401
-0822: 03a4
-0824: 4023
-0826: 2b00
-0828: d1f8
-082a: 1c40
-082c: 4288
-082e: d3f1
-0830: bd10
-0832: 0000
-0834: b800
+```
+
+## 080c uart_send()
+
+
+Args:
+- r0: p 
+- r1: n
+
+
+```
+080c: b510      ; push { r4, lr }
+080e: 4602      ; mov r2, r0			; p
+0810: 2000      ; movs r0, #0x0			; i=0
+0812: e00b      ; b [pc, #0x16]			; goto 082c
+```
+
+```c
+for(int i=0; i< n; i++) {
+```
+
+```
+0814: 5c13      ; ldrb r3, [r2, r0]		; b1 = p[i]
+0816: 4c07      ; ldr r4 [pc, #0x1c]	; 0834 -> 4006b800, UART1
+0818: 60a3      ; str r3, [r4, #0x8]	; UART_TDR = b1
+081a: bf00      ; nop
+081c: 4b05      ; ldr r3 [pc, #0x14]	; 0834 -> UART1
+081e: 695b      ; ldr r3, [r3, #0x14]	; UART_IF -> reg
+0820: 2401      ; movs r4, #0x1
+0822: 03a4      ; lsls r4, r4, #0xe		; 1 << 14
+0824: 4023      ; ands r3, r4			; reg & (1 << 14), reg.TXFIFO_FULL
+0826: 2b00      ; cmp r3, #0x0
+0828: d1f8      ; bne [pc, #-0x10]		; if reg.TXFIFO_FULL, goto 081c
+```
+
+```c
+}
+```
+
+```
+082a: 1c40      ; adds r0, #0x1
+082c: 4288      ; cmp r0, r1
+082e: d3f1      ; bcc [pc, #-0x1e]		; if i++ < n, goto 0814 
+0830: bd10      ; pop { r4, pc }
+0832: 0000      ; lsls r0, r0, #0x0
+0834: b800	; literal 
 0836: 4006
+```
+
+## 0838 _
+
+
+```
 0838: b5f8
 083a: 4606
 083c: 460d
@@ -1376,7 +1484,7 @@ Set `bytes / 4` words at base address `dest` to zero
 090e: 0000      ; lsls r0, r0, #0x0
 ```
 
-## 0910 xxxx()
+## 0910 main()
 
 
 ```
@@ -1407,44 +1515,58 @@ Enbaled periperal clock:
 0924: f7ff      ; [...]
 0926: fdb0      ; bl [pc, #-0x4a0]      ; call 0488, config_crc()
 0928: f7ff      ; [...]
-092a: fde2      ; bl [pc, #-0x43c]      ; call 
-092c: 4825      ; ldr r0 [pc, #0x94]
+092a: fde2      ; bl [pc, #-0x43c]      ; call 04f0, config_uart()
+```
+
+```
+092c: 4825      ; ldr r0 [pc, #0x94]	; 09c4 -> 200011c4, chip_id
 092e: f7ff      ; [...]
-0930: fd7d      ; bl [pc, #-0x506]
-0932: 4825      ; ldr r0 [pc, #0x94]
-0934: 6800      ; ldr r0, [r0]
-0936: 4c25      ; ldr r4 [pc, #0x94]
-0938: 06c0      ; lsls r0, r0, #0x1b
-093a: 0f80      ; lsrs r0, r0, #0x1e
-093c: 4f24      ; ldr r7 [pc, #0x90]
-093e: 4d25      ; ldr r5 [pc, #0x94]
+0930: fd7d      ; bl [pc, #-0x506]		; call 042c, load_chip_id(chip_id)
+```
+
+Static variables: 
+
+- 200003b4: flag1
+
+
+```
+0932: 4825      ; ldr r0 [pc, #0x94]	; 09c8 -> 40060000, GPIOA
+0934: 6800      ; ldr r0, [r0]			; GPIOA.GPIODATA -> data_a
+0936: 4c25      ; ldr r4 [pc, #0x94]	; 09cc -> 40061000, GPIOC
+0938: 06c0      ; lsls r0, r0, #0x1b	; data_a << 27
+093a: 0f80      ; lsrs r0, r0, #0x1e	; (data_a << 27) >> 30, bits [4:3] -> data_a_4_3
+093c: 4f24      ; ldr r7 [pc, #0x90]	; 09d0 -> 00030d40, 200000
+093e: 4d25      ; ldr r5 [pc, #0x94]	; 09d4 -> 200003b4, flag1
 0940: 2803      ; cmp r0, #0x3
-0942: d10c      ; bne [pc, #0x18]
-0944: 6820      ; ldr r0, [r4]
-0946: 0680      ; lsls r0, r0, #0x1a
-0948: d409      ; bmi [pc, #0x12]
+0942: d10c      ; bne [pc, #0x18]		; if data_a_4_3 != 0x3, goto 095e ; else .. (side button I & II not pressed)
+0944: 6820      ; ldr r0, [r4]			; GPIOC.GPIODATA -> data_c
+0946: 0680      ; lsls r0, r0, #0x1a	; data_c << 26, bit 5 -> 31 (GPIO PC5, PTT)
+0948: d409      ; bmi [pc, #0x12]		; if PTT == 1, goto 095e ; else .. (PTT pressed)
 094a: 4638      ; mov r0, r7
 094c: f7ff      ; [...]
-094e: fd5c      ; bl [pc, #-0x548]
+094e: fd5c      ; bl [pc, #-0x548]		; call 0408, delay_us(200000)
 0950: 6820      ; ldr r0, [r4]
 0952: 0680      ; lsls r0, r0, #0x1a
-0954: d403      ; bmi [pc, #0x6]
+0954: d403      ; bmi [pc, #0x6]		; if PTT == 1, goto 095e; else ..
 0956: 2001      ; movs r0, #0x1
-0958: 7028      ; strb r0, [r5]
+0958: 7028      ; strb r0, [r5]			; flag1 = 1
 095a: 2008      ; movs r0, #0x8
-095c: 6020      ; str r0, [r4]
+095c: 6020      ; str r0, [r4]			; GPIOC.GPIODATA = 0x8 , turn on flash light
+```
+
+```
 095e: 210c      ; movs r1, #0xc
-0960: 481d      ; ldr r0 [pc, #0x74]
+0960: 481d      ; ldr r0 [pc, #0x74]	; 09d8 -> 09fc
 0962: f7ff      ; [...]
-0964: ff53      ; bl [pc, #-0x15a]
+0964: ff53      ; bl [pc, #-0x15a]		; call 080c, uart_send(0x09fc, 12), send str "2.00.06\0??.."
 0966: 2102      ; movs r1, #0x2
-0968: a01c      ; add r0, pc, #0x70
+0968: a01c      ; add r0, pc, #0x70		; 09dc
 096a: f7ff      ; [...]
-096c: ff4f      ; bl [pc, #-0x162]
-096e: 7828      ; ldrb r0, [r5]
-0970: 4e1b      ; ldr r6 [pc, #0x6c]
+096c: ff4f      ; bl [pc, #-0x162]		; call 080c, uart_send(0x09dc, 2), send str "\r\n"
+096e: 7828      ; ldrb r0, [r5]			; flag1
+0970: 4e1b      ; ldr r6 [pc, #0x6c]	; 09e0 -> 000186a0, 100000
 0972: 2801      ; cmp r0, #0x1
-0974: d111      ; bne [pc, #0x22]
+0974: d111      ; bne [pc, #0x22]		; if !flag1, goto 099a
 0976: f7ff      ; [...]
 0978: fe21      ; bl [pc, #-0x3be]
 097a: 2800      ; cmp r0, #0x0
@@ -1463,13 +1585,19 @@ Enbaled periperal clock:
 0994: 4813      ; ldr r0 [pc, #0x4c]
 0996: f7ff      ; [...]
 0998: fd37      ; bl [pc, #-0x592]
-099a: 4630      ; mov r0, r6
+```
+
+```
+099a: 4630      ; mov r0, r6			; 100000
 099c: f7ff      ; [...]
-099e: fd34      ; bl [pc, #-0x598]
+099e: fd34      ; bl [pc, #-0x598]		; call 0408, delay_us(100000)
 09a0: f7ff      ; [...]
-09a2: fc36      ; bl [pc, #-0x794]
+09a2: fc36      ; bl [pc, #-0x794]		; call 0210, run_fw_safe()
 09a4: 2000      ; movs r0, #0x0
 09a6: bdf8      ; pop { r3 - r7, pc }
+```
+
+```
 09a8: 4638      ; mov r0, r7
 09aa: f7ff      ; [...]
 09ac: fd2d      ; bl [pc, #-0x5a6]
@@ -1484,21 +1612,24 @@ Enbaled periperal clock:
 09be: 0000
 09c0: 0085  ; literal 
 09c2: 0800
-09c4: 11c4
+09c4: 11c4 ; 
 09c6: 2000
-09c8: 0000
+09c8: 0000 ; 
 09ca: 4006
-09cc: 1000
+09cc: 1000 ; 
 09ce: 4006
-09d0: 0d40
+09d0: 0d40 ; 
 09d2: 0003
-09d4: 03b4
+09d4: 03b4 ; 
 09d6: 2000
-09d8: 09fc
+09d8: 09fc ; 
 09da: 0000
-09dc: 0a0d
+```
+  
+```
+09dc: 0a0d	; CRLF
 09de: 0000
-09e0: 86a0
+09e0: 86a0	; literal 
 09e2: 0001
 09e4: 93e0
 09e6: 0004
@@ -1512,11 +1643,15 @@ Enbaled periperal clock:
 09f6: 40d5
 09f8: 0313
 09fa: 80e9
-09fc: 2e32
-09fe: 3030
-0a00: 302e
-0a02: 0036
 ```
+
+```
+09fc: 2e32	; 2.
+09fe: 3030	; 00
+0a00: 302e	; .0
+0a02: 0036	; 6\0
+```
+
 
 ## 0a04 load_ram_fw1_tbl
 
@@ -1576,28 +1711,51 @@ offset = 0x00000a34 (2612)
 base = 0x20000000 (536870912)
 size = 0x000003c4 (964)
 file size = 65536
-20000000: 2000
-20000002: 4907
-20000004: 6208
-20000006: 2002
-20000008: 6208
-2000000a: 2006
-2000000c: 6208
-2000000e: f3bf
-20000010: 8f4f
-20000012: 4804
-20000014: 4904
-20000016: 60c8
-20000018: f3bf
-2000001a: 8f4f
-2000001c: bf00
-2000001e: e7fe
-20000020: f000
+```
+
+
+### 20000000 run_fw()
+
+
+Mask flash lower 4KB space (bootloader), and reset CPU core
+
+According to datasheet section 5.5 Power Management PMU, after reset most of digital periperals 
+will reset
+
+
+```
+20000000: 2000  ; movs r0, #0x0
+20000002: 4907  ; ldr r1 [pc, #0x1c]	; 20000020 -> 4006f000, FLASH_CTRL
+20000004: 6208  ; str r0, [r1, #0x20]	; FLASH_MASK = 0
+20000006: 2002  ; movs r0, #0x2
+20000008: 6208  ; str r0, [r1, #0x20]	; FLASH_MASK = 0x2 , mask 4 KB
+2000000a: 2006  ; movs r0, #0x6
+2000000c: 6208  ; str r0, [r1, #0x20]	; FLASH_MASK = 0x6 , lock
+2000000e: f3bf  ; [...]
+20000010: 8f4f  ; dsb
+20000012: 4804  ; ldr r0 [pc, #0x10]	; 05fa0004
+20000014: 4904  ; ldr r1 [pc, #0x10]	; e000ed00, SCB
+20000016: 60c8  ; str r0, [r1, #0xc]	; AIRCR = 0x05fa0004, System reset request
+20000018: f3bf  ; [...]
+2000001a: 8f4f  ; dsb
+2000001c: bf00  ; nop
+2000001e: e7fe  ; b [pc, #-0x4]		; goto .
+```
+
+```
+20000020: f000	; literal 
 20000022: 4006
-20000024: 0004
+20000024: 0004	;
 20000026: 05fa
-20000028: ed00
+20000028: ed00 ;
 2000002a: e000
+```
+
+### 2000002c _
+
+
+
+```
 2000002c: 4804
 2000002e: 6940
 20000030: 2104
@@ -2478,3 +2636,14 @@ Global variables
 0ffc: 0000
 0ffe: 0000
 ```
+
+
+## Gloabl variables
+
+
+### 200011c4 chip_id
+
+```c
+uint32_t chip_id[4]; 
+```
+
